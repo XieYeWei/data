@@ -64,6 +64,28 @@ public class YarnService {
         return m;
     }
 
+    /**
+     * Get all YARN queues with usage metrics - for monitoring charts
+     */
+    public List<Map<String, Object>> getAllQueues(String clusterId) throws IOException, YarnException {
+        YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
+        List<QueueInfo> queues = yarnClient.getAllQueues();
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (QueueInfo q : queues) {
+            Map<String, Object> m = new HashMap<>();
+            m.put("queueName", q.getQueueName());
+            m.put("capacity", q.getCapacity());           // configured capacity %
+            m.put("usedCapacity", q.getUsedCapacity());   // current usage %
+            m.put("numApplications", q.getNumApplications());
+            m.put("usedMemoryMB", q.getUsedResources() != null ? q.getUsedResources().getMemorySize() : 0);
+            m.put("usedVCores", q.getUsedResources() != null ? q.getUsedResources().getVirtualCores() : 0);
+            m.put("maxCapacity", q.getMaximumCapacity());
+            result.add(m);
+        }
+        return result;
+    }
+
     public String submitApplication(String clusterId, String appName, String queue, Long userId) throws IOException, YarnException {
         YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
         ApplicationSubmissionContext appContext = yarnClient.createApplication().getApplicationSubmissionContext();
