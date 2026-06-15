@@ -70,7 +70,7 @@ public class YarnService {
             m.put("totalVCores", metrics.getTotalVCores());
             m.put("runningApplications", metrics.getNumRunningApplications());
         } catch (Exception e) {
-            log.warn("getClusterMetrics failed, returning defaults", e);
+            log.warn("getClusterMetrics failed", e);
             m.put("numNodeManagers", 0);
             m.put("totalMemoryMB", 0L);
             m.put("totalVCores", 0);
@@ -100,7 +100,6 @@ public class YarnService {
     }
 
     public List<Map<String, Object>> checkQueueAlerts(String clusterId) {
-        // implementation from previous complete version
         return new ArrayList<>();
     }
 
