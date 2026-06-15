@@ -11,7 +11,9 @@ import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
 import java.util.*;
@@ -29,6 +31,8 @@ public class YarnService {
 
     @Autowired(required = false)
     private QueueAlertRuleMapper queueAlertRuleMapper;
+
+    private final RestTemplate restTemplate = new RestTemplate();
 
     public List<Map<String, Object>> listApplications(String clusterId, String state, Long userId) throws IOException, YarnException {
         YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
@@ -88,9 +92,6 @@ public class YarnService {
         return result;
     }
 
-    /**
-     * Check current queues against defined alert rules
-     */
     public List<Map<String, Object>> checkQueueAlerts(String clusterId) throws IOException, YarnException {
         List<QueueAlertRule> rules = (queueAlertRuleMapper != null) ? 
             queueAlertRuleMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<QueueAlertRule>().eq("enabled", true)) : 
@@ -131,6 +132,43 @@ public class YarnService {
             }
         }
         return triggeredAlerts;
+    }
+
+    /**
+     * Real dynamic queue capacity update using YARN ResourceManager REST API
+     */
+    public Map<String, Object> adjustQueueCapacityReal(String clusterId, String queueName, double newCapacity) {
+        try {
+            // In production, get RM address from Cluster entity
+            String rmAddress = "your-rm-host:8088"; // TODO: load dynamically
+
+            String url = String.format("http://%s/ws/v1/cluster/scheduler/queue/%s", rmAddress, queueName);
+
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("capacity", newCapacity);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
+
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.PUT, entity, String.class);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("queueName", queueName);
+            result.put("newCapacity", newCapacity);
+            result.put("status", response.getStatusCode().toString());
+            result.put("message", "Queue update requested via RM REST API. Run refreshQueues if needed.");
+
+            log.info("Dynamic queue adjustment via REST for {} -> {}", queueName, newCapacity);
+            return result;
+
+        } catch (Exception e) {
+            log.error("Dynamic queue update failed", e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            error.put("suggestion", "Modify capacity-scheduler.xml and run 'yarn rmadmin -refreshQueues'");
+            return error;
+        }
     }
 
     public String submitApplication(String clusterId, String appName, String queue, Long userId) throws IOException, YarnException {
