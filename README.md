@@ -11,7 +11,7 @@
 - ✅ 完整前端 SPA + ECharts Dashboard
 - ✅ `docs/ledger/` 台账系统（优化命名规范：`NN-Feature-Name` + 详细 README）
 
-## 台账系统
+## 更新
 
 所有重大更新都在 `docs/ledger/` 下以编号方式记录，方便团队审计与回溯。
 
