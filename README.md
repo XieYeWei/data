@@ -2,12 +2,13 @@
 
 **GitHub**: https://github.com/XieYeWei/data
 
-## 当前已完成功能 (v0.5)
+## v0.6 已完成功能
 
-- ✅ 多集群动态加载 + Kerberos
+- ✅ 多集群 + Kerberos
 - ✅ 完整审计日志 + 定时快照
-- ✅ MapReduce 模板提交 (官方 Job API)
-- ✅ **YARN 队列监控图表** (ECharts 实时容量使用率 + Running Apps)
+- ✅ MapReduce 模板提交
+- ✅ **YARN 队列监控图表** + **历史趋势**
+- ✅ **队列告警规则** + **动态权重调整**
 - ✅ `docs/ledger/` 台账系统
 
 ## 快速开始
