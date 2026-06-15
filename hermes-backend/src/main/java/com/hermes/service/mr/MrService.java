@@ -9,24 +9,17 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
-import org.apache.hadoop.util.ToolRunner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 
-/**
- * MapReduce Service - Deep integration with official org.apache.hadoop.mapreduce.Job
- * Supports template-based submission from HDFS JARs.
- */
 @Service
 public class MrService {
-
-    private static final Logger log = LoggerFactory.getLogger(MrService.class);
 
     @Autowired
     private HadoopConfig hadoopConfig;
@@ -37,51 +30,36 @@ public class MrService {
     @Autowired(required = false)
     private OperationLogMapper operationLogMapper;
 
-    /**
-     * Submit MapReduce job from a saved template
-     */
+    @SuppressWarnings("unchecked")
     public String submitJobFromTemplate(String clusterId, Long templateId, Long userId) throws Exception {
         JobTemplate template = jobTemplateMapper.selectById(templateId);
         if (template == null) {
-            throw new IllegalArgumentException("Template not found: " + templateId);
+            throw new RuntimeException("Job template not found");
         }
 
-        Configuration conf = hadoopConfig.getFileSystem(clusterId).getConf();
-        conf.set("mapreduce.job.queuename", template.getQueue() != null ? template.getQueue() : "default");
-
+        Configuration conf = hadoopConfig.getHadoopConf(clusterId);
         Job job = Job.getInstance(conf, template.getName());
-        job.setJarByClass(Class.forName(template.getMainClass())); // or use addJar
-        job.setJar(template.getJarHdfsPath()); // Load JAR from HDFS
 
-        job.setMapperClass(Class.forName(template.getMainClass() + "$Mapper")); // Convention
-        job.setReducerClass(Class.forName(template.getMainClass() + "$Reducer"));
+        // Dynamically load Mapper and Reducer (assumes inner classes $Mapper and $Reducer)
+        Class<?> mapperClass = Class.forName(template.getMainClass() + "$Mapper");
+        Class<?> reducerClass = Class.forName(template.getMainClass() + "$Reducer");
+
+        job.setMapperClass((Class<? extends Mapper>) mapperClass);
+        job.setReducerClass((Class<? extends Reducer>) reducerClass);
+
+        job.setJarByClass(Class.forName(template.getMainClass()));
+        job.setOutputKeyClass(org.apache.hadoop.io.Text.class);
+        job.setOutputValueClass(org.apache.hadoop.io.IntWritable.class);
 
         FileInputFormat.addInputPath(job, new Path(template.getInputPath()));
         FileOutputFormat.setOutputPath(job, new Path(template.getOutputPath()));
 
-        // Parse defaultArgs if JSON
-        if (template.getDefaultArgs() != null) {
-            // TODO: parse and set job parameters
-        }
-
         boolean success = job.waitForCompletion(true);
 
-        String appId = job.getJobID().toString();
-        logOperation(userId, clusterId, "mr", "submitTemplate", template.getName(), success ? "success" : "failed", appId);
+        // Log operation
+        logOperation(userId, clusterId, "mr", "submitTemplate", template.getName(), success ? "success" : "failed", null);
 
-        if (!success) {
-            throw new RuntimeException("MapReduce job failed: " + appId);
-        }
-        return appId;
-    }
-
-    public JobTemplate saveTemplate(JobTemplate template) {
-        jobTemplateMapper.insert(template);
-        return template;
-    }
-
-    public JobTemplate getTemplate(Long id) {
-        return jobTemplateMapper.selectById(id);
+        return job.getJobID().toString();
     }
 
     private void logOperation(Long userId, String clusterIdStr, String module, String action, String target, String result, String detail) {
@@ -96,8 +74,8 @@ public class MrService {
             entry.setResult(result);
             entry.setDetail(detail);
             operationLogMapper.insert(entry);
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            // ignore logging errors
+        }
     }
-
-    // Advanced: Support custom args override at submit time
 }
