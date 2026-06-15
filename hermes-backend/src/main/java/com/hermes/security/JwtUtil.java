@@ -57,7 +57,7 @@ public class JwtUtil {
     }
 
     private Claims extractAllClaims(String token) {
-        // Use the older but very stable parser() method
+        // 最稳定写法：使用 Jwts.parser()
         return Jwts.parser()
                 .setSigningKey(getSigningKey())
                 .parseClaimsJws(token)
