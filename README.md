@@ -2,23 +2,25 @@
 
 **GitHub**: https://github.com/XieYeWei/data
 
-## 当前已完成功能
+## 当前已完成功能 (v0.4)
 
-- ✅ 多集群 HDFS + YARN 客户端集成
-- ✅ Spring Security + JWT 完整登录
-- ✅ MyBatis-Plus 审计表 (User / Cluster / OperationLog / MetricSnapshot)
-- ✅ **实时审计日志**：HDFS/YARN 关键操作自动写入 OperationLog
-- ✅ **定时指标采集**：@Scheduled 每 5 分钟收集 HDFS/YARN 指标并存入 MetricSnapshot 表
-- ✅ 完整前端 SPA + ECharts Dashboard + YARN 管理
-- ✅ Kerberos 架构支持
+- ✅ 多集群动态加载 + Kerberos keytab 真实支持
+- ✅ 完整审计日志 + 定时指标快照
+- ✅ **MapReduce 模板提交** 深度实现（官方 Job API + HDFS JAR）
+- ✅ YARN 队列管理策略支持
+- ✅ 完整前端 SPA + ECharts Dashboard
+- ✅ `docs/ledger/` 台账系统（优化命名规范：`NN-Feature-Name` + 详细 README）
+
+## 台账系统
+
+所有重大更新都在 `docs/ledger/` 下以编号方式记录，方便团队审计与回溯。
 
 ## 快速开始
 
 ```bash
-cd hermes-backend && mvn clean package && java -jar target/*.jar
+# 后端
+cd hermes-backend && mvn clean package && java -jar target/hermes-backend-0.0.1-SNAPSHOT.jar
+
+# 前端
 cd hermes-frontend && npm install && npm run dev
 ```
-
-**Demo 账号**：admin / admin
-
-现在已具备完整的运维、审计、可视化能力。
