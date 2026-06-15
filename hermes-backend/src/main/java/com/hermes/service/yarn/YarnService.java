@@ -1,6 +1,8 @@
 package com.hermes.service.yarn;
 
 import com.hermes.config.HadoopConfig;
+import com.hermes.entity.OperationLog;
+import com.hermes.mapper.OperationLogMapper;
 import org.apache.hadoop.yarn.api.records.*;
 import org.apache.hadoop.yarn.client.api.YarnClient;
 import org.apache.hadoop.yarn.exceptions.YarnException;
@@ -20,15 +22,18 @@ public class YarnService {
     @Autowired
     private HadoopConfig hadoopConfig;
 
-    public List<Map<String, Object>> listApplications(String clusterId, String state) throws IOException, YarnException {
+    @Autowired(required = false)
+    private OperationLogMapper operationLogMapper;
+
+    public List<Map<String, Object>> listApplications(String clusterId, String state, Long userId) throws IOException, YarnException {
         YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
         EnumSet<YarnApplicationState> states = EnumSet.allOf(YarnApplicationState.class);
         if (state != null && !state.isEmpty()) {
-            try {
-                states = EnumSet.of(YarnApplicationState.valueOf(state.toUpperCase()));
-            } catch (Exception ignored) {}
+            try { states = EnumSet.of(YarnApplicationState.valueOf(state.toUpperCase())); } catch (Exception ignored) {}
         }
         List<ApplicationReport> reports = yarnClient.getApplications(states);
+        logOperation(userId, clusterId, "yarn", "listApps", state, "success", null);
+
         List<Map<String, Object>> result = new ArrayList<>();
         for (ApplicationReport r : reports) {
             Map<String, Object> m = new HashMap<>();
@@ -53,33 +58,44 @@ public class YarnService {
         Map<String, Object> m = new HashMap<>();
         m.put("numNodeManagers", metrics.getNumNodeManagers());
         m.put("numDecommissionedNodeManagers", metrics.getNumDecommissionedNodeManagers());
-        m.put("totalMemoryMB", metrics.getTotalMemoryMB());  // or from getClusterMetrics in newer
+        m.put("totalMemoryMB", metrics.getTotalMemoryMB());
         m.put("totalVCores", metrics.getTotalVCores());
         m.put("runningApplications", metrics.getNumRunningApplications());
         return m;
     }
 
-    /**
-     * Basic YARN app submit example (for MapReduce or custom).
-     * In production: build full ApplicationSubmissionContext with Resource, Priority, etc.
-     */
-    public String submitApplication(String clusterId, String appName, String queue) throws IOException, YarnException {
+    public String submitApplication(String clusterId, String appName, String queue, Long userId) throws IOException, YarnException {
         YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
         ApplicationSubmissionContext appContext = yarnClient.createApplication().getApplicationSubmissionContext();
         appContext.setApplicationName(appName != null ? appName : "Hermes-Submitted-App");
         appContext.setQueue(queue != null ? queue : "default");
-        // TODO: Set AM container spec, resource (memory/vcore), command, etc.
-        // For full submit, need to set ApplicationMaster or use existing JAR submission logic
         ApplicationId appId = appContext.getApplicationId();
         yarnClient.submitApplication(appContext);
-        log.info("Submitted YARN app {} to cluster {}", appId, clusterId);
+        logOperation(userId, clusterId, "yarn", "submitApp", appId.toString(), "success", null);
         return appId.toString();
     }
 
-    public void killApplication(String clusterId, String appIdStr) throws IOException, YarnException {
+    public void killApplication(String clusterId, String appIdStr, Long userId) throws IOException, YarnException {
         YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
         ApplicationId appId = ApplicationId.fromString(appIdStr);
         yarnClient.killApplication(appId);
-        log.info("Killed YARN app {} on cluster {}", appId, clusterId);
+        logOperation(userId, clusterId, "yarn", "killApp", appIdStr, "success", null);
+    }
+
+    private void logOperation(Long userId, String clusterIdStr, String module, String action, String target, String result, String detail) {
+        if (operationLogMapper == null) return;
+        try {
+            OperationLog logEntry = new OperationLog();
+            logEntry.setUserId(userId != null ? userId : 1L);
+            logEntry.setClusterId(Long.parseLong(clusterIdStr.replace("cluster", "")));
+            logEntry.setModule(module);
+            logEntry.setAction(action);
+            logEntry.setTarget(target);
+            logEntry.setResult(result);
+            logEntry.setDetail(detail);
+            operationLogMapper.insert(logEntry);
+        } catch (Exception e) {
+            log.warn("Failed to write audit log", e);
+        }
     }
 }
