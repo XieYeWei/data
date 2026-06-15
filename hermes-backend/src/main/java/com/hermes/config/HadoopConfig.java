@@ -28,73 +28,87 @@ public class HadoopConfig {
     private String defaultClusterId;
 
     @Autowired(required = false)
-    private ClusterMapper clusterMapper;  // For future DB-driven clusters
+    private ClusterMapper clusterMapper;
 
     private final Map<String, FileSystem> fsCache = new ConcurrentHashMap<>();
     private final Map<String, YarnClient> yarnCache = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() {
-        log.info("HadoopConfig initialized. Default cluster: {}", defaultClusterId);
+        log.info("HadoopConfig initialized with dynamic cluster loading support");
     }
 
     /**
-     * Get FileSystem for cluster (supports Kerberos via keytab if configured)
+     * Get or load Cluster entity from DB (or fallback to properties)
      */
+    private Cluster getClusterEntity(String clusterId) {
+        if (clusterMapper != null) {
+            Cluster cluster = clusterMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<Cluster>()
+                    .eq("name", clusterId).eq("enabled", true)
+            );
+            if (cluster != null) return cluster;
+        }
+        // Fallback to hardcoded demo
+        Cluster demo = new Cluster();
+        demo.setName(clusterId);
+        demo.setNamenode("hdfs://your-namenode:8020");
+        demo.setResourcemanager("your-rm-host:8032");
+        demo.setAuthType("simple");
+        return demo;
+    }
+
     public FileSystem getFileSystem(String clusterId) throws IOException {
         return fsCache.computeIfAbsent(clusterId, id -> {
             try {
-                Configuration conf = buildConfForCluster(id);
+                Cluster cluster = getClusterEntity(id);
+                Configuration conf = buildConf(cluster);
                 FileSystem fs = FileSystem.get(URI.create(conf.get("fs.defaultFS")), conf);
-                log.info("Created FileSystem for cluster {}", id);
+                log.info("Created FileSystem for cluster: {} (auth={})", id, cluster.getAuthType());
                 return fs;
             } catch (Exception e) {
-                log.error("Failed to init FileSystem for {}", id, e);
+                log.error("Failed to create FileSystem for {}", id, e);
                 throw new RuntimeException(e);
             }
         });
     }
 
-    /**
-     * Get YarnClient for cluster (with Kerberos support)
-     */
     public YarnClient getYarnClient(String clusterId) throws IOException {
         return yarnCache.computeIfAbsent(clusterId, id -> {
             try {
-                Configuration conf = buildConfForCluster(id);
+                Cluster cluster = getClusterEntity(id);
+                Configuration conf = buildConf(cluster);
                 YarnConfiguration yarnConf = new YarnConfiguration(conf);
                 YarnClient client = YarnClient.createYarnClient();
                 client.init(yarnConf);
                 client.start();
-                log.info("Created YarnClient for cluster {}", id);
+                log.info("Created YarnClient for cluster: {} (auth={})", id, cluster.getAuthType());
                 return client;
             } catch (Exception e) {
-                log.error("Failed to init YarnClient for {}", id, e);
+                log.error("Failed to create YarnClient for {}", id, e);
                 throw new RuntimeException(e);
             }
         });
     }
 
-    private Configuration buildConfForCluster(String clusterId) throws IOException {
+    private Configuration buildConf(Cluster cluster) throws IOException {
         Configuration conf = new Configuration();
-        // TODO: In production, load from ClusterMapper.findByName(clusterId)
-        // For demo, use yml or hardcoded
-        String nn = "hdfs://your-namenode:8020"; // from yml or DB
-        String rm = "your-rm-host:8032";
-        String auth = "simple";
+        conf.set("fs.defaultFS", cluster.getNamenode());
+        conf.set("yarn.resourcemanager.address", cluster.getResourcemanager());
+        conf.set("hadoop.security.authentication", cluster.getAuthType());
 
-        conf.set("fs.defaultFS", nn);
-        conf.set("yarn.resourcemanager.address", rm);
-        conf.set("hadoop.security.authentication", auth);
-
-        if ("kerberos".equalsIgnoreCase(auth)) {
-            // Example Kerberos setup (uncomment and configure keytab/principal in Cluster entity)
-            // UserGroupInformation.setConfiguration(conf);
-            // UserGroupInformation.loginUserFromKeytab("hdfs@REALM", "/path/to/hdfs.keytab");
-            log.info("Kerberos mode enabled for cluster {}", clusterId);
+        if ("kerberos".equalsIgnoreCase(cluster.getAuthType())) {
+            UserGroupInformation.setConfiguration(conf);
+            if (cluster.getKeytabPath() != null && cluster.getPrincipal() != null) {
+                try {
+                    UserGroupInformation.loginUserFromKeytab(cluster.getPrincipal(), cluster.getKeytabPath());
+                    log.info("Kerberos login successful for principal: {}", cluster.getPrincipal());
+                } catch (IOException e) {
+                    log.error("Kerberos login failed", e);
+                    throw e;
+                }
+            }
         }
-
-        UserGroupInformation.setConfiguration(conf);
         return conf;
     }
 
