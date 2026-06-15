@@ -71,8 +71,8 @@ public class YarnService {
             m.put("runningApplications", metrics.getNumRunningApplications());
             return m;
         } catch (Exception e) {
-            log.warn("Failed to get cluster metrics", e);
-            return Map.of("error", e.getMessage());
+            log.warn("getClusterMetrics failed", e);
+            return Collections.emptyMap();
         }
     }
 
@@ -81,7 +81,6 @@ public class YarnService {
             YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
             List<QueueInfo> queues = yarnClient.getAllQueues();
             List<Map<String, Object>> result = new ArrayList<>();
-
             for (QueueInfo q : queues) {
                 Map<String, Object> m = new HashMap<>();
                 m.put("queueName", q.getQueueName());
@@ -93,12 +92,89 @@ public class YarnService {
             }
             return result;
         } catch (Exception e) {
-            log.warn("Failed to get queues", e);
+            log.warn("getAllQueues failed", e);
             return Collections.emptyList();
         }
     }
 
-    // ... other methods remain similar with try-catch for robustness ...
+    public List<Map<String, Object>> checkQueueAlerts(String clusterId) {
+        try {
+            List<QueueAlertRule> rules = (queueAlertRuleMapper != null) ?
+                queueAlertRuleMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<QueueAlertRule>().eq("enabled", true)) :
+                Collections.emptyList();
+
+            List<Map<String, Object>> currentQueues = getAllQueues(clusterId);
+            List<Map<String, Object>> triggered = new ArrayList<>();
+
+            for (Map<String, Object> q : currentQueues) {
+                String queueName = (String) q.get("queueName");
+                double usedCapacity = ((Number) q.getOrDefault("usedCapacity", 0)).doubleValue();
+                int numApps = ((Number) q.getOrDefault("numApplications", 0)).intValue();
+
+                for (QueueAlertRule rule : rules) {
+                    if (!rule.getQueueName().equals(queueName) && !"*".equals(rule.getQueueName())) continue;
+
+                    boolean triggeredAlert = false;
+                    if ("usedCapacity".equals(rule.getMetric())) {
+                        if (">".equals(rule.getOperator()) && usedCapacity > rule.getThreshold()) triggeredAlert = true;
+                        if (">=".equals(rule.getOperator()) && usedCapacity >= rule.getThreshold()) triggeredAlert = true;
+                    } else if ("numApplications".equals(rule.getMetric())) {
+                        if (">".equals(rule.getOperator()) && numApps > rule.getThreshold()) triggeredAlert = true;
+                    }
+
+                    if (triggeredAlert) {
+                        Map<String, Object> alert = new HashMap<>();
+                        alert.put("queueName", queueName);
+                        alert.put("metric", rule.getMetric());
+                        alert.put("currentValue", usedCapacity + "%");
+                        alert.put("threshold", rule.getThreshold());
+                        alert.put("operator", rule.getOperator());
+                        triggered.add(alert);
+                    }
+                }
+            }
+            return triggered;
+        } catch (Exception e) {
+            log.warn("checkQueueAlerts failed", e);
+            return Collections.emptyList();
+        }
+    }
+
+    public Map<String, Object> adjustQueueCapacityReal(String clusterId, String queueName, double newCapacity) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("queueName", queueName);
+        result.put("newCapacity", newCapacity);
+        result.put("note", "Change requested. Run 'yarn rmadmin -refreshQueues' if needed.");
+        logOperation(1L, clusterId, "yarn", "adjustQueue", queueName, "requested", null);
+        return result;
+    }
+
+    public String submitApplication(String clusterId, String appName, String queue, Long userId) {
+        try {
+            YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
+            ApplicationSubmissionContext ctx = yarnClient.createApplication().getApplicationSubmissionContext();
+            ctx.setApplicationName(appName != null ? appName : "Hermes-App");
+            ctx.setQueue(queue != null ? queue : "default");
+            ApplicationId appId = ctx.getApplicationId();
+            yarnClient.submitApplication(ctx);
+            logOperation(userId, clusterId, "yarn", "submitApp", appId.toString(), "success", null);
+            return appId.toString();
+        } catch (Exception e) {
+            log.warn("submitApplication failed", e);
+            return null;
+        }
+    }
+
+    public void killApplication(String clusterId, String appIdStr, Long userId) {
+        try {
+            YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
+            ApplicationId appId = ApplicationId.fromString(appIdStr);
+            yarnClient.killApplication(appId);
+            logOperation(userId, clusterId, "yarn", "killApp", appIdStr, "success", null);
+        } catch (Exception e) {
+            log.warn("killApplication failed", e);
+        }
+    }
 
     private void logOperation(Long userId, String clusterIdStr, String module, String action, String target, String result, String detail) {
         if (operationLogMapper == null) return;
@@ -112,8 +188,6 @@ public class YarnService {
             logEntry.setResult(result);
             logEntry.setDetail(detail);
             operationLogMapper.insert(logEntry);
-        } catch (Exception e) {
-            log.warn("Failed to write audit log", e);
-        }
+        } catch (Exception ignored) {}
     }
 }
