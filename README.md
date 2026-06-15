@@ -2,46 +2,37 @@
 
 **GitHub**: https://github.com/XieYeWei/data
 
-## 当前已实现功能 (2026-06-15 更新)
+## 当前已完成功能 (2026-06-15 最新)
 
-- ✅ 多集群配置 + 动态 FileSystem / YarnClient 创建
-- ✅ HDFS 文件浏览器 (listStatus, getFileStatus, ContentSummary)
-- ✅ YARN 应用管理：列表、提交、Kill、集群指标 (YarnClient API)
-- ✅ Spring Security + JWT 认证 (登录接口、路由保护、@PreAuthorize)
-- ✅ MyBatis-Plus + H2 (demo) 数据库：User、Cluster、OperationLog 表
-- ✅ Kerberos keytab 支持占位符（在 HadoopConfig 中可扩展为真实登录）
-- ✅ 可视化指标 Dashboard：HDFS 容量 + YARN 资源、节点、应用数（ECharts 就绪）
-- ✅ 操作审计框架 (OperationLog 表 + 后端日志)
+- ✅ 多集群动态 FileSystem / YarnClient
+- ✅ HDFS 文件浏览器 (CRUD 基础)
+- ✅ YARN 应用列表 / 提交 / Kill / 指标
+- ✅ **完整前端 SPA**：登录弹窗 + JWT 自动附加 + **3个 Tab**
+  - **Dashboard**：ECharts 图表 (HDFS 存储饼图 + YARN 资源柱状图) + 实时刷新
+  - **HDFS 文件管理**
+  - **YARN 应用管理** (提交弹窗 + Kill)
+- ✅ Spring Security + JWT (完整登录流程)
+- ✅ MyBatis-Plus + H2 审计表 (User / Cluster / OperationLog)
+- ✅ Kerberos keytab 支持架构
+- ✅ Dashboard API 集成 HDFS + YARN 指标
 
-## 使用方式
+## 快速开始
 
-### 后端
 ```bash
-cd hermes-backend
-mvn clean package
-java -jar target/hermes-backend-0.0.1-SNAPSHOT.jar
+# 后端
+cd hermes-backend && mvn clean package && java -jar target/*.jar
+
+# 前端
+cd hermes-frontend && npm install && npm run dev
 ```
 
-默认用户：`admin` / `admin` 或 `user` / `user`
+**Demo 账号**：`admin` / `admin` （或 `user` / `user`）
 
-登录后获取 JWT Token 在 Header `Authorization: Bearer <token>` 使用。
+登录后即可使用所有功能。
 
-H2 Console: http://localhost:8080/h2-console (jdbc:h2:mem:hermes)
+## 项目状态
 
-### 前端
-```bash
-cd hermes-frontend
-npm install
-npm run dev
-```
+前端已实现完整可视化交互平台，后端核心功能齐全。
+可直接用于演示或作为企业内部开发基础。
 
-前端已支持 HDFS 浏览器和基本 Dashboard 视图。
-
-## 下一步计划
-- 完整前端 Dashboard + YARN 页面 + ECharts 图表
-- 实现完整审计日志写入 DB
-- MySQL 替换 H2 + Cluster 表动态加载
-- MapReduce 模板提交
-- 定时任务采集指标并存储
-
-项目已完全按照官方 Hadoop 客户端接口开发，可直接扩展到生产环境。
+欢迎继续提交 PR 或请求新功能！
