@@ -3,25 +3,19 @@ package com.hermes.service;
 import com.hermes.config.HadoopConfig;
 import com.hermes.entity.MetricSnapshot;
 import com.hermes.mapper.MetricSnapshotMapper;
-import com.hermes.service.hdfs.HdfsService;
 import com.hermes.service.yarn.YarnService;
 import org.apache.hadoop.fs.ContentSummary;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
-/**
- * Scheduled task to collect cluster metrics and persist to DB (metric_snapshot table).
- * Runs every 5 minutes by default.
- */
 @Service
 public class MetricsCollector {
 
@@ -31,26 +25,18 @@ public class MetricsCollector {
     private HadoopConfig hadoopConfig;
 
     @Autowired
-    private HdfsService hdfsService;
-
-    @Autowired
     private YarnService yarnService;
 
     @Autowired
     private MetricSnapshotMapper metricSnapshotMapper;
 
-    /**
-     * Collect metrics for default cluster every 5 minutes.
-     * In production: loop over all enabled clusters from Cluster table.
-     */
-    @Scheduled(fixedRate = 300000) // 5 minutes
+    @Scheduled(fixedRate = 300000)
     public void collectMetrics() {
-        String clusterId = "cluster1"; // TODO: load from DB
+        String clusterId = "cluster1";
         try {
-            // HDFS metrics
+            // HDFS
             FileSystem fs = hadoopConfig.getFileSystem(clusterId);
             ContentSummary summary = fs.getContentSummary(new Path("/"));
-
             MetricSnapshot hdfsSnap = new MetricSnapshot();
             hdfsSnap.setClusterId(1L);
             hdfsSnap.setModule("hdfs");
@@ -58,8 +44,8 @@ public class MetricsCollector {
             hdfsSnap.setFileCount(summary.getFileCount());
             metricSnapshotMapper.insert(hdfsSnap);
 
-            // YARN metrics
-            var yarnMetrics = yarnService.getClusterMetrics(clusterId);
+            // YARN Cluster
+            Map<String, Object> yarnMetrics = yarnService.getClusterMetrics(clusterId);
             MetricSnapshot yarnSnap = new MetricSnapshot();
             yarnSnap.setClusterId(1L);
             yarnSnap.setModule("yarn");
@@ -68,9 +54,21 @@ public class MetricsCollector {
             yarnSnap.setRunningApplications(((Number) yarnMetrics.getOrDefault("runningApplications", 0)).intValue());
             metricSnapshotMapper.insert(yarnSnap);
 
-            log.info("Metrics snapshot collected for cluster {}", clusterId);
-        } catch (IOException | YarnException e) {
-            log.error("Failed to collect metrics for cluster {}", clusterId, e);
+            // Optimized: Per-queue history persistence
+            List<Map<String, Object>> queues = yarnService.getAllQueues(clusterId);
+            for (Map<String, Object> q : queues) {
+                MetricSnapshot qSnap = new MetricSnapshot();
+                qSnap.setClusterId(1L);
+                qSnap.setModule("queue");
+                qSnap.setUsedSpace(((Number) q.getOrDefault("usedMemoryMB", 0)).longValue());
+                qSnap.setExtraJson(String.format("{\"queueName\":\"%s\",\"usedCapacity\":%.1f,\"numApplications\":%d}",
+                        q.get("queueName"), q.get("usedCapacity"), q.get("numApplications")));
+                metricSnapshotMapper.insert(qSnap);
+            }
+
+            log.info("Queue history metrics collected successfully");
+        } catch (Exception e) {
+            log.error("Metrics collection error", e);
         }
     }
 }
