@@ -101,28 +101,50 @@
 
         <!-- YARN Tab -->
         <el-tab-pane label="YARN 应用管理" name="yarn">
-          <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
-            <el-input v-model="yarnStateFilter" placeholder="状态筛选 (RUNNING/FINISHED)" style="width: 220px;" />
-            <el-button type="primary" @click="loadYarnApps">查询应用</el-button>
-            <el-button type="success" @click="showSubmitDialog = true">提交新应用</el-button>
-          </div>
+          <el-row :gutter="20">
+            <!-- Existing YARN Apps Section -->
+            <el-col :span="14">
+              <el-card header="YARN 应用列表">
+                <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center;">
+                  <el-input v-model="yarnStateFilter" placeholder="状态筛选" style="width: 200px;" />
+                  <el-button type="primary" @click="loadYarnApps">查询应用</el-button>
+                  <el-button type="success" @click="showSubmitDialog = true">提交新应用</el-button>
+                </div>
 
-          <el-table :data="yarnAppList" v-loading="yarnLoading" stripe>
-            <el-table-column prop="appId" label="App ID" width="180" />
-            <el-table-column prop="name" label="名称" min-width="160" />
-            <el-table-column prop="user" label="用户" width="100" />
-            <el-table-column prop="state" label="状态" width="120">
-              <template #default="scope">
-                <el-tag :type="scope.row.state === 'RUNNING' ? 'success' : 'info'">{{ scope.row.state }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="progress" label="进度" width="80" />
-            <el-table-column label="操作" width="160">
-              <template #default="scope">
-                <el-button v-if="scope.row.state === 'RUNNING'" size="small" type="danger" @click="killYarnApp(scope.row.appId)">杀掉</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+                <el-table :data="yarnAppList" v-loading="yarnLoading" stripe style="max-height: 400px; overflow: auto;">
+                  <el-table-column prop="appId" label="App ID" width="160" />
+                  <el-table-column prop="name" label="名称" min-width="140" />
+                  <el-table-column prop="queue" label="队列" width="100" />
+                  <el-table-column prop="state" label="状态" width="110">
+                    <template #default="scope">
+                      <el-tag :type="scope.row.state === 'RUNNING' ? 'success' : 'info'">{{ scope.row.state }}</el-tag>
+                    </template>
+                  </el-table-column>
+                  <el-table-column label="操作" width="120">
+                    <template #default="scope">
+                      <el-button v-if="scope.row.state === 'RUNNING'" size="small" type="danger" @click="killYarnApp(scope.row.appId)">杀掉</el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </el-card>
+            </el-col>
+
+            <!-- NEW: YARN Queue Monitoring Charts -->
+            <el-col :span="10">
+              <el-card header="YARN 队列监控图表">
+                <el-button type="primary" size="small" @click="loadQueueMetrics" style="margin-bottom: 10px; width: 100%">
+                  刷新队列状态
+                </el-button>
+
+                <div ref="queueCapacityChart" style="height: 220px; margin-bottom: 15px;"></div>
+                <div ref="queueAppsChart" style="height: 220px;"></div>
+
+                <div style="margin-top: 10px; font-size: 12px; color: #909399;">
+                  显示各队列容量使用率与 Running Apps 数量
+                </div>
+              </el-card>
+            </el-col>
+          </el-row>
         </el-tab-pane>
       </el-tabs>
     </el-main>
@@ -187,6 +209,14 @@ const showSubmitDialog = ref(false)
 const submitLoading = ref(false)
 const submitForm = ref({ appName: 'Hermes-Test-App', queue: 'default' })
 
+// NEW: Queue Monitoring
+const queueCapacityChart = ref(null)
+const queueAppsChart = ref(null)
+let queueCapacityInstance = null
+let queueAppsInstance = null
+
+const queueData = ref([])
+
 // Axios interceptor for JWT
 axios.interceptors.request.use(config => {
   if (token.value) {
@@ -250,7 +280,7 @@ const renderCharts = () => {
   if (hdfsEchartInstance) hdfsEchartInstance.dispose()
   hdfsEchartInstance = echarts.init(hdfsChart.value)
   const used = hdfsData.value.usedSpace || 0
-  const total = used * 1.5 || 100  // demo total
+  const total = used * 1.5 || 100
   hdfsEchartInstance.setOption({
     title: { text: 'HDFS 存储使用率', left: 'center', top: 10 },
     tooltip: { trigger: 'item' },
@@ -261,8 +291,7 @@ const renderCharts = () => {
       data: [
         { value: used, name: '已使用' },
         { value: total - used, name: '剩余' }
-      ],
-      emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.5)' } }
+      ]
     }]
   })
 
@@ -369,6 +398,63 @@ const submitYarnApp = async () => {
   }
 }
 
+// NEW: Queue Monitoring Functions
+const loadQueueMetrics = async () => {
+  try {
+    const res = await axios.get('/api/v1/yarn/queues', {
+      params: { clusterId: currentCluster.value }
+    })
+    if (res.data.code === 0) {
+      queueData.value = res.data.data
+      nextTick(() => {
+        renderQueueCharts()
+      })
+    }
+  } catch (e) {
+    ElMessage.error('获取队列数据失败: ' + e.message)
+  }
+}
+
+const renderQueueCharts = () => {
+  if (!queueData.value || queueData.value.length === 0) return
+
+  const queueNames = queueData.value.map(q => q.queueName)
+  const usedCapacities = queueData.value.map(q => q.usedCapacity || 0)
+  const numApps = queueData.value.map(q => q.numApplications || 0)
+
+  // Capacity Usage Chart
+  if (queueCapacityInstance) queueCapacityInstance.dispose()
+  queueCapacityInstance = echarts.init(queueCapacityChart.value)
+  queueCapacityInstance.setOption({
+    title: { text: '队列容量使用率 (%)', left: 'center', top: 5 },
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: queueNames, axisLabel: { rotate: 30 } },
+    yAxis: { type: 'value', max: 100 },
+    series: [{
+      name: '已使用容量',
+      type: 'bar',
+      data: usedCapacities,
+      itemStyle: { color: '#67c23a' }
+    }]
+  })
+
+  // Running Apps per Queue
+  if (queueAppsInstance) queueAppsInstance.dispose()
+  queueAppsInstance = echarts.init(queueAppsChart.value)
+  queueAppsInstance.setOption({
+    title: { text: '每队列 Running Apps 数量', left: 'center', top: 5 },
+    tooltip: { trigger: 'axis' },
+    xAxis: { type: 'category', data: queueNames, axisLabel: { rotate: 30 } },
+    yAxis: { type: 'value' },
+    series: [{
+      name: 'Running Apps',
+      type: 'bar',
+      data: numApps,
+      itemStyle: { color: '#409eff' }
+    }]
+  })
+}
+
 // Utils
 const formatSize = (bytes) => {
   if (!bytes) return '0 B'
@@ -383,7 +469,10 @@ const formatTime = (ts) => ts ? new Date(ts).toLocaleString() : '-'
 const handleTabChange = (tab) => {
   if (tab.paneName === 'dashboard') refreshDashboard()
   if (tab.paneName === 'hdfs') loadHdfsFiles()
-  if (tab.paneName === 'yarn') loadYarnApps()
+  if (tab.paneName === 'yarn') {
+    loadYarnApps()
+    loadQueueMetrics()  // auto load queue charts
+  }
 }
 
 // Init
@@ -392,10 +481,11 @@ onMounted(() => {
     refreshDashboard()
     loadHdfsFiles()
   }
-  // Resize charts on window resize
   window.addEventListener('resize', () => {
     hdfsEchartInstance?.resize()
     yarnEchartInstance?.resize()
+    queueCapacityInstance?.resize()
+    queueAppsInstance?.resize()
   })
 })
 </script>
