@@ -37,8 +37,9 @@ public class MrService {
         return jobTemplateMapper.selectById(id);
     }
 
-    public boolean saveTemplate(JobTemplate template) {
-        return jobTemplateMapper.insert(template) > 0;
+    public JobTemplate saveTemplate(JobTemplate template) {
+        jobTemplateMapper.insert(template);
+        return template;  // return the saved entity
     }
 
     @SuppressWarnings("unchecked")
