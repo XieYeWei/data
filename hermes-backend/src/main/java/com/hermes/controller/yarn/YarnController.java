@@ -22,7 +22,7 @@ public class YarnController {
             @RequestParam(defaultValue = "cluster1") String clusterId,
             @RequestParam(required = false) String state) {
         try {
-            List<Map<String, Object>> apps = yarnService.listApplications(clusterId, state);
+            List<Map<String, Object>> apps = yarnService.listApplications(clusterId, state, 1L);
             return success(apps);
         } catch (Exception e) {
             return error(500, e.getMessage());
@@ -39,13 +39,26 @@ public class YarnController {
         }
     }
 
+    /**
+     * YARN Queue monitoring data for charts
+     */
+    @GetMapping("/queues")
+    public Map<String, Object> getQueues(@RequestParam(defaultValue = "cluster1") String clusterId) {
+        try {
+            List<Map<String, Object>> queues = yarnService.getAllQueues(clusterId);
+            return success(queues);
+        } catch (Exception e) {
+            return error(500, e.getMessage());
+        }
+    }
+
     @PostMapping("/submit")
     @PreAuthorize("hasRole('ADMIN')")
     public Map<String, Object> submit(@RequestParam(defaultValue = "cluster1") String clusterId,
                                       @RequestParam String appName,
                                       @RequestParam(defaultValue = "default") String queue) {
         try {
-            String appId = yarnService.submitApplication(clusterId, appName, queue);
+            String appId = yarnService.submitApplication(clusterId, appName, queue, 1L);
             return success(Map.of("appId", appId));
         } catch (Exception e) {
             return error(500, "Submit failed: " + e.getMessage());
@@ -57,7 +70,7 @@ public class YarnController {
     public Map<String, Object> kill(@RequestParam(defaultValue = "cluster1") String clusterId,
                                     @RequestParam String appId) {
         try {
-            yarnService.killApplication(clusterId, appId);
+            yarnService.killApplication(clusterId, appId, 1L);
             return success("Killed " + appId);
         } catch (Exception e) {
             return error(500, e.getMessage());
