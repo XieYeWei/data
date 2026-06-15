@@ -57,9 +57,9 @@ public class JwtUtil {
     }
 
     private Claims extractAllClaims(String token) {
-        return Jwts.parserBuilder()
+        // Use older parser for better compatibility
+        return Jwts.parser()
                 .setSigningKey(getSigningKey())
-                .build()
                 .parseClaimsJws(token)
                 .getBody();
     }
