@@ -70,7 +70,7 @@ public class YarnService {
             m.put("totalVCores", metrics.getTotalVCores());
             m.put("runningApplications", metrics.getNumRunningApplications());
         } catch (Exception e) {
-            log.warn("getClusterMetrics failed, using defaults", e);
+            log.warn("getClusterMetrics failed, returning defaults", e);
             m.put("numNodeManagers", 0);
             m.put("totalMemoryMB", 0L);
             m.put("totalVCores", 0);
@@ -107,7 +107,7 @@ public class YarnService {
         Map<String, Object> result = new HashMap<>();
         result.put("queueName", queueName);
         result.put("newCapacity", newCapacity);
-        result.put("note", "Change requested. Please run refreshQueues manually if needed.");
+        result.put("note", "Change requested. Run 'yarn rmadmin -refreshQueues' if needed.");
         return result;
     }
 
