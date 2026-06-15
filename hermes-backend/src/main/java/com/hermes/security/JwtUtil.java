@@ -1,6 +1,8 @@
 package com.hermes.security;
 
-import io.jsonwebtoken.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -55,9 +57,9 @@ public class JwtUtil {
     }
 
     private Claims extractAllClaims(String token) {
-        return Jwts.parserBuilder()
+        // Using parser() for better compatibility in some environments
+        return Jwts.parser()
                 .setSigningKey(getSigningKey())
-                .build()
                 .parseClaimsJws(token)
                 .getBody();
     }
@@ -70,7 +72,6 @@ public class JwtUtil {
         return extractClaim(token, Claims::getExpiration);
     }
 
-    // Helper method for JwtRequestFilter
     public String getUsernameFromToken(String token) {
         return extractUsername(token);
     }
