@@ -1,6 +1,8 @@
 package com.hermes.service.hdfs;
 
 import com.hermes.config.HadoopConfig;
+import com.hermes.entity.OperationLog;
+import com.hermes.mapper.OperationLogMapper;
 import org.apache.hadoop.fs.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,11 +13,6 @@ import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * HDFS Service layer using official Hadoop FileSystem / DistributedFileSystem APIs.
- * Implements core file browser operations (read-only for milestone 1).
- * All operations go through FileSystem interface for compatibility.
- */
 @Service
 public class HdfsService {
 
@@ -24,38 +21,33 @@ public class HdfsService {
     @Autowired
     private HadoopConfig hadoopConfig;
 
-    /**
-     * List directory contents using FileSystem.listStatus(Path)
-     */
-    public List<Map<String, Object>> listFiles(String clusterId, String pathStr) throws IOException {
+    @Autowired(required = false)
+    private OperationLogMapper operationLogMapper; // for audit
+
+    public List<Map<String, Object>> listFiles(String clusterId, String pathStr, Long userId) throws IOException {
         FileSystem fs = hadoopConfig.getFileSystem(clusterId);
         Path path = new Path(pathStr);
         if (!fs.exists(path)) {
             throw new IOException("Path does not exist: " + pathStr);
         }
         FileStatus[] statuses = fs.listStatus(path);
-        return Arrays.stream(statuses)
-                .map(this::fileStatusToMap)
-                .collect(Collectors.toList());
+        logOperation(userId, clusterId, "hdfs", "list", pathStr, "success", null);
+        return Arrays.stream(statuses).map(this::fileStatusToMap).collect(Collectors.toList());
     }
 
-    /**
-     * Get single file/directory status using FileSystem.getFileStatus(Path)
-     */
-    public Map<String, Object> getFileStatus(String clusterId, String pathStr) throws IOException {
+    public Map<String, Object> getFileStatus(String clusterId, String pathStr, Long userId) throws IOException {
         FileSystem fs = hadoopConfig.getFileSystem(clusterId);
         Path path = new Path(pathStr);
         FileStatus status = fs.getFileStatus(path);
+        logOperation(userId, clusterId, "hdfs", "getStatus", pathStr, "success", null);
         return fileStatusToMap(status);
     }
 
-    /**
-     * Get content summary (used for quota, space usage) - FileSystem.getContentSummary
-     */
-    public Map<String, Object> getContentSummary(String clusterId, String pathStr) throws IOException {
+    public Map<String, Object> getContentSummary(String clusterId, String pathStr, Long userId) throws IOException {
         FileSystem fs = hadoopConfig.getFileSystem(clusterId);
         Path path = new Path(pathStr);
         ContentSummary summary = fs.getContentSummary(path);
+        logOperation(userId, clusterId, "hdfs", "getSummary", pathStr, "success", null);
         Map<String, Object> result = new HashMap<>();
         result.put("length", summary.getLength());
         result.put("fileCount", summary.getFileCount());
@@ -64,6 +56,23 @@ public class HdfsService {
         result.put("spaceQuota", summary.getSpaceQuota());
         result.put("spaceConsumed", summary.getSpaceConsumed());
         return result;
+    }
+
+    private void logOperation(Long userId, String clusterIdStr, String module, String action, String target, String result, String detail) {
+        if (operationLogMapper == null) return;
+        try {
+            OperationLog logEntry = new OperationLog();
+            logEntry.setUserId(userId != null ? userId : 1L); // demo user
+            logEntry.setClusterId(Long.parseLong(clusterIdStr.replace("cluster", "")));
+            logEntry.setModule(module);
+            logEntry.setAction(action);
+            logEntry.setTarget(target);
+            logEntry.setResult(result);
+            logEntry.setDetail(detail);
+            operationLogMapper.insert(logEntry);
+        } catch (Exception e) {
+            log.warn("Failed to write audit log", e);
+        }
     }
 
     private Map<String, Object> fileStatusToMap(FileStatus status) {
@@ -83,9 +92,5 @@ public class HdfsService {
         return map;
     }
 
-    // TODO for future milestones:
-    // - create/mkdirs using fs.mkdirs(Path, FsPermission)
-    // - delete using fs.delete(Path, recursive)
-    // - rename, setPermission, upload/download streams (FSDataOutputStream / FSDataInputStream)
-    // - Support UserGroupInformation.doAs(proxyUser, action) for audited proxy operations
+    // TODO: Add create, delete, upload with proper audit logging
 }
