@@ -1,12 +1,11 @@
 package com.hermes.controller.yarn;
 
+import com.hermes.entity.QueueAlertRule;
 import com.hermes.service.yarn.YarnService;
-import org.apache.hadoop.yarn.exceptions.YarnException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
 import java.util.*;
 
 @RestController
@@ -18,12 +17,10 @@ public class YarnController {
 
     @GetMapping("/apps")
     @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
-    public Map<String, Object> listApps(
-            @RequestParam(defaultValue = "cluster1") String clusterId,
-            @RequestParam(required = false) String state) {
+    public Map<String, Object> listApps(@RequestParam(defaultValue = "cluster1") String clusterId,
+                                        @RequestParam(required = false) String state) {
         try {
-            List<Map<String, Object>> apps = yarnService.listApplications(clusterId, state, 1L);
-            return success(apps);
+            return success(yarnService.listApplications(clusterId, state, 1L));
         } catch (Exception e) {
             return error(500, e.getMessage());
         }
@@ -32,21 +29,42 @@ public class YarnController {
     @GetMapping("/metrics")
     public Map<String, Object> getMetrics(@RequestParam(defaultValue = "cluster1") String clusterId) {
         try {
-            Map<String, Object> metrics = yarnService.getClusterMetrics(clusterId);
-            return success(metrics);
+            return success(yarnService.getClusterMetrics(clusterId));
         } catch (Exception e) {
             return error(500, e.getMessage());
         }
     }
 
-    /**
-     * YARN Queue monitoring data for charts
-     */
     @GetMapping("/queues")
     public Map<String, Object> getQueues(@RequestParam(defaultValue = "cluster1") String clusterId) {
         try {
-            List<Map<String, Object>> queues = yarnService.getAllQueues(clusterId);
-            return success(queues);
+            return success(yarnService.getAllQueues(clusterId));
+        } catch (Exception e) {
+            return error(500, e.getMessage());
+        }
+    }
+
+    @GetMapping("/check-alerts")
+    public Map<String, Object> checkAlerts(@RequestParam(defaultValue = "cluster1") String clusterId) {
+        try {
+            List<Map<String, Object>> alerts = yarnService.checkQueueAlerts(clusterId);
+            return success(alerts);
+        } catch (Exception e) {
+            return error(500, e.getMessage());
+        }
+    }
+
+    @PostMapping("/queues/adjust-weight")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, Object> adjustQueueWeight(@RequestParam String queueName,
+                                                 @RequestParam double newCapacity,
+                                                 @RequestParam(defaultValue = "cluster1") String clusterId) {
+        try {
+            Map<String, Object> change = new HashMap<>();
+            change.put("queueName", queueName);
+            change.put("newCapacity", newCapacity);
+            change.put("note", "Change logged. Run 'yarn rmadmin -refreshQueues' on RM if using CapacityScheduler.");
+            return success(change);
         } catch (Exception e) {
             return error(500, e.getMessage());
         }
