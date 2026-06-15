@@ -2,7 +2,9 @@ package com.hermes.service.yarn;
 
 import com.hermes.config.HadoopConfig;
 import com.hermes.entity.OperationLog;
+import com.hermes.entity.QueueAlertRule;
 import com.hermes.mapper.OperationLogMapper;
+import com.hermes.mapper.QueueAlertRuleMapper;
 import org.apache.hadoop.yarn.api.records.*;
 import org.apache.hadoop.yarn.client.api.YarnClient;
 import org.apache.hadoop.yarn.exceptions.YarnException;
@@ -24,6 +26,9 @@ public class YarnService {
 
     @Autowired(required = false)
     private OperationLogMapper operationLogMapper;
+
+    @Autowired(required = false)
+    private QueueAlertRuleMapper queueAlertRuleMapper;
 
     public List<Map<String, Object>> listApplications(String clusterId, String state, Long userId) throws IOException, YarnException {
         YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
@@ -64,9 +69,6 @@ public class YarnService {
         return m;
     }
 
-    /**
-     * Get all YARN queues with usage metrics - for monitoring charts
-     */
     public List<Map<String, Object>> getAllQueues(String clusterId) throws IOException, YarnException {
         YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
         List<QueueInfo> queues = yarnClient.getAllQueues();
@@ -75,8 +77,8 @@ public class YarnService {
         for (QueueInfo q : queues) {
             Map<String, Object> m = new HashMap<>();
             m.put("queueName", q.getQueueName());
-            m.put("capacity", q.getCapacity());           // configured capacity %
-            m.put("usedCapacity", q.getUsedCapacity());   // current usage %
+            m.put("capacity", q.getCapacity());
+            m.put("usedCapacity", q.getUsedCapacity());
             m.put("numApplications", q.getNumApplications());
             m.put("usedMemoryMB", q.getUsedResources() != null ? q.getUsedResources().getMemorySize() : 0);
             m.put("usedVCores", q.getUsedResources() != null ? q.getUsedResources().getVirtualCores() : 0);
@@ -84,6 +86,51 @@ public class YarnService {
             result.add(m);
         }
         return result;
+    }
+
+    /**
+     * Check current queues against defined alert rules
+     */
+    public List<Map<String, Object>> checkQueueAlerts(String clusterId) throws IOException, YarnException {
+        List<QueueAlertRule> rules = (queueAlertRuleMapper != null) ? 
+            queueAlertRuleMapper.selectList(new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<QueueAlertRule>().eq("enabled", true)) : 
+            Collections.emptyList();
+
+        List<Map<String, Object>> currentQueues = getAllQueues(clusterId);
+        List<Map<String, Object>> triggeredAlerts = new ArrayList<>();
+
+        for (Map<String, Object> q : currentQueues) {
+            String queueName = (String) q.get("queueName");
+            double usedCapacity = ((Number) q.getOrDefault("usedCapacity", 0)).doubleValue();
+            int numApps = ((Number) q.getOrDefault("numApplications", 0)).intValue();
+
+            for (QueueAlertRule rule : rules) {
+                if (!rule.getQueueName().equals(queueName) && !"*".equals(rule.getQueueName())) continue;
+
+                boolean triggered = false;
+                String currentValue = "";
+
+                if ("usedCapacity".equals(rule.getMetric())) {
+                    currentValue = String.format("%.1f", usedCapacity) + "%";
+                    if (">".equals(rule.getOperator()) && usedCapacity > rule.getThreshold()) triggered = true;
+                    if (">=".equals(rule.getOperator()) && usedCapacity >= rule.getThreshold()) triggered = true;
+                } else if ("numApplications".equals(rule.getMetric())) {
+                    currentValue = String.valueOf(numApps);
+                    if (">".equals(rule.getOperator()) && numApps > rule.getThreshold()) triggered = true;
+                }
+
+                if (triggered) {
+                    Map<String, Object> alert = new HashMap<>();
+                    alert.put("queueName", queueName);
+                    alert.put("metric", rule.getMetric());
+                    alert.put("currentValue", currentValue);
+                    alert.put("threshold", rule.getThreshold());
+                    alert.put("operator", rule.getOperator());
+                    triggeredAlerts.add(alert);
+                }
+            }
+        }
+        return triggeredAlerts;
     }
 
     public String submitApplication(String clusterId, String appName, String queue, Long userId) throws IOException, YarnException {
