@@ -1,0 +1,32 @@
+# Hermes Backend Configuration
+server:
+  port: 8080
+
+spring:
+  application:
+    name: hermes-backend
+
+# Hadoop multi-cluster config (extend with DB in future milestones)
+hadoop:
+  default-cluster-id: cluster1
+  # Add more clusters here or load dynamically from MySQL cluster table
+  # clusters:
+  #   cluster1:
+  #     namenode: hdfs://nn1:8020
+  #     version: 3.3.6
+
+# Logging
+logging:
+  level:
+    com.hermes: DEBUG
+    org.apache.hadoop: WARN
+
+# TODO: Add MySQL datasource, JWT secret, etc. for full platform
+# spring:
+#   datasource:
+#     url: jdbc:mysql://localhost:3306/hermes?useSSL=false&serverTimezone=UTC
+#     username: root
+#     password: yourpassword
+#   jpa:
+#     hibernate:
+#       ddl-auto: update
