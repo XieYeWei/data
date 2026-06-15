@@ -69,4 +69,9 @@ public class JwtUtil {
     public Date extractExpiration(String token) {
         return extractClaim(token, Claims::getExpiration);
     }
+
+    // Helper method for JwtRequestFilter
+    public String getUsernameFromToken(String token) {
+        return extractUsername(token);
+    }
 }
