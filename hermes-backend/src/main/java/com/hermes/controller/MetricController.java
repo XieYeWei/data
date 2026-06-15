@@ -16,15 +16,24 @@ public class MetricController {
 
     @GetMapping("/history")
     public Object getHistory(@RequestParam(defaultValue = "cluster1") String clusterId,
-                             @RequestParam(defaultValue = "hdfs") String module,
-                             @RequestParam(defaultValue = "20") int limit) {
-        // Simple query latest N records
-        List<MetricSnapshot> list = metricSnapshotMapper.selectList(
-            new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<MetricSnapshot>()
+                             @RequestParam(defaultValue = "queue") String module,
+                             @RequestParam(required = false) String startTime,
+                             @RequestParam(required = false) String endTime,
+                             @RequestParam(defaultValue = "50") int limit) {
+
+        var query = new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper<MetricSnapshot>()
                 .eq("module", module)
                 .orderByDesc("create_time")
-                .last("LIMIT " + limit)
-        );
+                .last("LIMIT " + limit);
+
+        if (startTime != null && !startTime.isEmpty()) {
+            query.ge("create_time", startTime);
+        }
+        if (endTime != null && !endTime.isEmpty()) {
+            query.le("create_time", endTime);
+        }
+
+        List<MetricSnapshot> list = metricSnapshotMapper.selectList(query);
         return java.util.Map.of("code", 0, "data", list);
     }
 }
