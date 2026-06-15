@@ -47,7 +47,7 @@ public class YarnController {
     }
 
     /**
-     * Alert Rule Full CRUD
+     * Alert Rule CRUD
      */
     @GetMapping("/alert-rules")
     public Map<String, Object> listAlertRules() {
@@ -60,6 +60,15 @@ public class YarnController {
     public Map<String, Object> createAlertRule(@RequestBody QueueAlertRule rule) {
         if (queueAlertRuleMapper == null) return error(500, "Database not available");
         queueAlertRuleMapper.insert(rule);
+        return success(rule);
+    }
+
+    @PutMapping("/alert-rules/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public Map<String, Object> updateAlertRule(@PathVariable Long id, @RequestBody QueueAlertRule rule) {
+        if (queueAlertRuleMapper == null) return error(500, "Database not available");
+        rule.setId(id);
+        queueAlertRuleMapper.updateById(rule);
         return success(rule);
     }
 
