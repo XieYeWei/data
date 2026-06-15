@@ -54,8 +54,6 @@ public class YarnService {
             m.put("progress", r.getProgress());
             m.put("startTime", r.getStartTime());
             m.put("finishTime", r.getFinishTime());
-            m.put("memoryMB", r.getApplicationResourceUsageReport().getUsedResources().getMemorySize());
-            m.put("vcores", r.getApplicationResourceUsageReport().getUsedResources().getVirtualCores());
             result.add(m);
         }
         return result;
@@ -84,8 +82,6 @@ public class YarnService {
             m.put("capacity", q.getCapacity());
             m.put("usedCapacity", q.getUsedCapacity());
             m.put("numApplications", q.getNumApplications());
-            m.put("usedMemoryMB", q.getUsedResources() != null ? q.getUsedResources().getMemorySize() : 0);
-            m.put("usedVCores", q.getUsedResources() != null ? q.getUsedResources().getVirtualCores() : 0);
             m.put("maxCapacity", q.getMaximumCapacity());
             result.add(m);
         }
@@ -134,14 +130,9 @@ public class YarnService {
         return triggeredAlerts;
     }
 
-    /**
-     * Real dynamic queue capacity update using YARN ResourceManager REST API
-     */
     public Map<String, Object> adjustQueueCapacityReal(String clusterId, String queueName, double newCapacity) {
         try {
-            // In production, get RM address from Cluster entity
-            String rmAddress = "your-rm-host:8088"; // TODO: load dynamically
-
+            String rmAddress = "your-rm-host:8088";
             String url = String.format("http://%s/ws/v1/cluster/scheduler/queue/%s", rmAddress, queueName);
 
             Map<String, Object> payload = new HashMap<>();
@@ -157,16 +148,11 @@ public class YarnService {
             result.put("queueName", queueName);
             result.put("newCapacity", newCapacity);
             result.put("status", response.getStatusCode().toString());
-            result.put("message", "Queue update requested via RM REST API. Run refreshQueues if needed.");
-
-            log.info("Dynamic queue adjustment via REST for {} -> {}", queueName, newCapacity);
             return result;
-
         } catch (Exception e) {
-            log.error("Dynamic queue update failed", e);
             Map<String, Object> error = new HashMap<>();
             error.put("error", e.getMessage());
-            error.put("suggestion", "Modify capacity-scheduler.xml and run 'yarn rmadmin -refreshQueues'");
+            error.put("suggestion", "Run 'yarn rmadmin -refreshQueues' after modifying capacity-scheduler.xml");
             return error;
         }
     }
