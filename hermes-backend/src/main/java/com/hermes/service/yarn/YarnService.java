@@ -70,7 +70,7 @@ public class YarnService {
             m.put("totalVCores", metrics.getTotalVCores());
             m.put("runningApplications", metrics.getNumRunningApplications());
         } catch (Exception e) {
-            log.warn("getClusterMetrics failed", e);
+            log.warn("getClusterMetrics failed, using defaults", e);
             m.put("numNodeManagers", 0);
             m.put("totalMemoryMB", 0L);
             m.put("totalVCores", 0);
@@ -107,7 +107,7 @@ public class YarnService {
         Map<String, Object> result = new HashMap<>();
         result.put("queueName", queueName);
         result.put("newCapacity", newCapacity);
-        result.put("note", "Change requested");
+        result.put("note", "Change requested. Please run refreshQueues manually if needed.");
         return result;
     }
 
@@ -115,21 +115,27 @@ public class YarnService {
         try {
             YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
             ApplicationSubmissionContext ctx = yarnClient.createApplication().getApplicationSubmissionContext();
-            ctx.setApplicationName(appName);
-            ctx.setQueue(queue);
-            ApplicationId id = ctx.getApplicationId();
+            ctx.setApplicationName(appName != null ? appName : "Hermes-Submitted-App");
+            ctx.setQueue(queue != null ? queue : "default");
+            ApplicationId appId = ctx.getApplicationId();
             yarnClient.submitApplication(ctx);
-            return id.toString();
+            logOperation(userId, clusterId, "yarn", "submitApp", appId.toString(), "success", null);
+            return appId.toString();
         } catch (Exception e) {
+            log.warn("submitApplication failed", e);
             return null;
         }
     }
 
-    public void killApplication(String clusterId, String appId, Long userId) {
+    public void killApplication(String clusterId, String appIdStr, Long userId) {
         try {
             YarnClient yarnClient = hadoopConfig.getYarnClient(clusterId);
-            yarnClient.killApplication(ApplicationId.fromString(appId));
-        } catch (Exception ignored) {}
+            ApplicationId appId = ApplicationId.fromString(appIdStr);
+            yarnClient.killApplication(appId);
+            logOperation(userId, clusterId, "yarn", "killApp", appIdStr, "success", null);
+        } catch (Exception e) {
+            log.warn("killApplication failed", e);
+        }
     }
 
     private void logOperation(Long userId, String clusterIdStr, String module, String action, String target, String result, String detail) {
