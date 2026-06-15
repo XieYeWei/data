@@ -1,38 +1,24 @@
-# 企业级 Hadoop 集群管理平台 (Hadoop Cluster Management Platform)
+# 企业级 Hadoop 集群管理平台
 
 **GitHub**: https://github.com/XieYeWei/data
 
-## 当前已完成功能 (2026-06-15 最新)
+## 当前已完成功能
 
-- ✅ 多集群动态 FileSystem / YarnClient
-- ✅ HDFS 文件浏览器 (CRUD 基础)
-- ✅ YARN 应用列表 / 提交 / Kill / 指标
-- ✅ **完整前端 SPA**：登录弹窗 + JWT 自动附加 + **3个 Tab**
-  - **Dashboard**：ECharts 图表 (HDFS 存储饼图 + YARN 资源柱状图) + 实时刷新
-  - **HDFS 文件管理**
-  - **YARN 应用管理** (提交弹窗 + Kill)
-- ✅ Spring Security + JWT (完整登录流程)
-- ✅ MyBatis-Plus + H2 审计表 (User / Cluster / OperationLog)
-- ✅ Kerberos keytab 支持架构
-- ✅ Dashboard API 集成 HDFS + YARN 指标
+- ✅ 多集群 HDFS + YARN 客户端集成
+- ✅ Spring Security + JWT 完整登录
+- ✅ MyBatis-Plus 审计表 (User / Cluster / OperationLog / MetricSnapshot)
+- ✅ **实时审计日志**：HDFS/YARN 关键操作自动写入 OperationLog
+- ✅ **定时指标采集**：@Scheduled 每 5 分钟收集 HDFS/YARN 指标并存入 MetricSnapshot 表
+- ✅ 完整前端 SPA + ECharts Dashboard + YARN 管理
+- ✅ Kerberos 架构支持
 
 ## 快速开始
 
 ```bash
-# 后端
 cd hermes-backend && mvn clean package && java -jar target/*.jar
-
-# 前端
 cd hermes-frontend && npm install && npm run dev
 ```
 
-**Demo 账号**：`admin` / `admin` （或 `user` / `user`）
+**Demo 账号**：admin / admin
 
-登录后即可使用所有功能。
-
-## 项目状态
-
-前端已实现完整可视化交互平台，后端核心功能齐全。
-可直接用于演示或作为企业内部开发基础。
-
-欢迎继续提交 PR 或请求新功能！
+现在已具备完整的运维、审计、可视化能力。
