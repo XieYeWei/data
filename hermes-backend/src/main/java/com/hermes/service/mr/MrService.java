@@ -6,7 +6,6 @@ import com.hermes.entity.OperationLog;
 import com.hermes.mapper.JobTemplateMapper;
 import com.hermes.mapper.OperationLogMapper;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -16,7 +15,7 @@ import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
+import java.util.List;
 
 @Service
 public class MrService {
@@ -30,6 +29,18 @@ public class MrService {
     @Autowired(required = false)
     private OperationLogMapper operationLogMapper;
 
+    public List<JobTemplate> getAllTemplates() {
+        return jobTemplateMapper.selectList(null);
+    }
+
+    public JobTemplate getTemplate(Long id) {
+        return jobTemplateMapper.selectById(id);
+    }
+
+    public boolean saveTemplate(JobTemplate template) {
+        return jobTemplateMapper.insert(template) > 0;
+    }
+
     @SuppressWarnings("unchecked")
     public String submitJobFromTemplate(String clusterId, Long templateId, Long userId) throws Exception {
         JobTemplate template = jobTemplateMapper.selectById(templateId);
@@ -40,13 +51,11 @@ public class MrService {
         Configuration conf = hadoopConfig.getHadoopConf(clusterId);
         Job job = Job.getInstance(conf, template.getName());
 
-        // Dynamically load Mapper and Reducer (assumes inner classes $Mapper and $Reducer)
         Class<?> mapperClass = Class.forName(template.getMainClass() + "$Mapper");
         Class<?> reducerClass = Class.forName(template.getMainClass() + "$Reducer");
 
         job.setMapperClass((Class<? extends Mapper>) mapperClass);
         job.setReducerClass((Class<? extends Reducer>) reducerClass);
-
         job.setJarByClass(Class.forName(template.getMainClass()));
         job.setOutputKeyClass(org.apache.hadoop.io.Text.class);
         job.setOutputValueClass(org.apache.hadoop.io.IntWritable.class);
@@ -55,8 +64,6 @@ public class MrService {
         FileOutputFormat.setOutputPath(job, new Path(template.getOutputPath()));
 
         boolean success = job.waitForCompletion(true);
-
-        // Log operation
         logOperation(userId, clusterId, "mr", "submitTemplate", template.getName(), success ? "success" : "failed", null);
 
         return job.getJobID().toString();
@@ -74,8 +81,6 @@ public class MrService {
             entry.setResult(result);
             entry.setDetail(detail);
             operationLogMapper.insert(entry);
-        } catch (Exception e) {
-            // ignore logging errors
-        }
+        } catch (Exception ignored) {}
     }
 }
