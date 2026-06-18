@@ -1,6 +1,7 @@
 package com.hermes.controller;
 
 import com.hermes.config.HadoopConfig;
+import com.hermes.config.HermesProperties;
 import com.hermes.service.hdfs.HdfsService;
 import com.hermes.service.yarn.YarnService;
 import org.apache.hadoop.fs.ContentSummary;
@@ -23,6 +24,9 @@ public class DashboardController {
 
     @Autowired
     private YarnService yarnService;
+
+    @Autowired
+    private HermesProperties hermesProperties;
 
     /**
      * Unified cluster overview for visualization (ECharts ready)
@@ -51,5 +55,14 @@ public class DashboardController {
             overview.put("error", e.getMessage());
         }
         return Map.of("code", 0, "data", overview);
+    }
+
+    /**
+     * Get Grafana dashboard URL for embedding
+     */
+    @GetMapping("/grafana-config")
+    public Map<String, Object> getGrafanaConfig() {
+        String url = hermesProperties.getGrafana().getUrl();
+        return Map.of("code", 0, "data", Map.of("url", url != null ? url : ""));
     }
 }

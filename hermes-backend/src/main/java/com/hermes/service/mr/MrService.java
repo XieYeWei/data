@@ -5,6 +5,8 @@ import com.hermes.entity.JobTemplate;
 import com.hermes.entity.OperationLog;
 import com.hermes.mapper.JobTemplateMapper;
 import com.hermes.mapper.OperationLogMapper;
+import com.hermes.mapper.UserMapper;
+import com.hermes.util.AuditHelper;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.mapreduce.Job;
@@ -28,6 +30,8 @@ public class MrService {
 
     @Autowired(required = false)
     private OperationLogMapper operationLogMapper;
+    @Autowired(required = false)
+    private UserMapper userMapper;
 
     public List<JobTemplate> getAllTemplates() {
         return jobTemplateMapper.selectList(null);
@@ -67,7 +71,25 @@ public class MrService {
         boolean success = job.waitForCompletion(true);
         logOperation(userId, clusterId, "mr", "submitTemplate", template.getName(), success ? "success" : "failed", null);
 
+        // Track usage statistics
+        if (success) {
+            try {
+                template.setUseCount(template.getUseCount() == null ? 1 : template.getUseCount() + 1);
+                template.setLastUsedTime(java.time.LocalDateTime.now());
+                jobTemplateMapper.updateById(template);
+            } catch (Exception ignored) {}
+        }
+
         return job.getJobID().toString();
+    }
+
+    public void deleteTemplate(Long id) {
+        jobTemplateMapper.deleteById(id);
+    }
+
+    public JobTemplate updateTemplate(JobTemplate template) {
+        jobTemplateMapper.updateById(template);
+        return jobTemplateMapper.selectById(template.getId());
     }
 
     private void logOperation(Long userId, String clusterIdStr, String module, String action, String target, String result, String detail) {
@@ -75,6 +97,7 @@ public class MrService {
         try {
             OperationLog entry = new OperationLog();
             entry.setUserId(userId != null ? userId : 1L);
+            entry.setUsername(AuditHelper.getUsernameById(userMapper, userId));
             entry.setClusterId(Long.parseLong(clusterIdStr.replace("cluster", "")));
             entry.setModule(module);
             entry.setAction(action);

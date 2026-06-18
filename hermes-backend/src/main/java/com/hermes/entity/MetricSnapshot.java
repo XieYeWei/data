@@ -14,6 +14,7 @@ public class MetricSnapshot {
     private Long usedSpace;          // HDFS used bytes
     private Long fileCount;
     private Integer numNodeManagers;
+    @TableField("total_memory_mb")
     private Long totalMemoryMB;
     private Integer runningApplications;
     private String extraJson;        // future extension

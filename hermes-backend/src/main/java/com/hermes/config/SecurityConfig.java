@@ -36,11 +36,26 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http.csrf(csrf -> csrf.disable())
+            .securityMatcher("/api/**")
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**", "/h2-console/**", "/actuator/**").permitAll()
+                .requestMatchers("/api/v1/auth/**").permitAll()
                 .anyRequest().authenticated()
             )
-            .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+            .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .formLogin(form -> form.disable())
+            .httpBasic(basic -> basic.disable())
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) -> {
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.setStatus(200);
+                    response.getWriter().write("{\"code\":401,\"msg\":\"" + authException.getMessage() + "\",\"data\":null}");
+                })
+                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.setStatus(200);
+                    response.getWriter().write("{\"code\":403,\"msg\":\"权限不足\",\"data\":null}");
+                })
+            );
 
         http.addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
         // For H2 console in dev

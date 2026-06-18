@@ -137,6 +137,13 @@
             </exclusions>
         </dependency>
 
+        <!-- Hadoop HDFS needs protobuf (excluded above due to version conflicts) -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>3.21.9</version>
+        </dependency>
+
         <!-- Dev Tools -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

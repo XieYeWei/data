@@ -17,6 +17,9 @@ public class JobTemplate {
     private String inputPath;
     private String outputPath;
     private String queue;            // YARN queue
+    private String type;             // template category: WiFi, Spark, 自定义, etc.
+    private Integer useCount;        // how many times this template has been used
+    private LocalDateTime lastUsedTime; // last submission time
     private Long createdBy;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
