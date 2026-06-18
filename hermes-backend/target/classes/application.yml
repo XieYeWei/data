@@ -1,0 +1,121 @@
+# =============================================
+# Hermes Backend - MySQL 生产配置
+# =============================================
+server:
+  port: 8080
+
+spring:
+  application:
+    name: hermes-backend
+
+  # 允许循环引用（JWT 过滤器和 SecurityConfig 之间的依赖）
+  main:
+    allow-circular-references: true
+
+  # ---------- 数据库配置（MySQL） ----------
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/hermes?useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: c56Qp*gD$D!51%H0&j%T
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  # ---------- 邮件通知配置（可选） ----------
+  mail:
+    host: localhost          # SMTP 服务器地址
+    port: 25                 # SMTP 端口
+
+  # 启动时自动执行 schema.sql 和 data.sql 建表+初始化数据
+  sql:
+    init:
+      mode: never            # 首次部署改为 always，后续改为 never
+
+  # ---------- 文件上传 ----------
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 500MB
+      max-request-size: 500MB
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+
+# ---------- MyBatis-Plus 配置 ----------
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# ---------- JWT 令牌配置 ----------
+jwt:
+  secret: hermes-super-secret-key-for-jwt-token-generation-2026-change-in-prod
+  expiration: 86400000       # 令牌有效期（毫秒），默认 24 小时
+
+# ---------- 日志级别 ----------
+logging:
+  level:
+    com.hermes: DEBUG
+    org.apache.hadoop: WARN
+
+# =============================================
+# Hermes 平台自定义配置
+# =============================================
+hermes:
+
+  # ---------- 默认集群配置 ----------
+  cluster:
+    default-id: cluster1         # 默认集群 ID
+    name: demo-cluster           # 集群显示名称
+    namenode: hdfs://mycluster          # HDFS NameNode 地址
+    resourcemanager: localhost:8032     # YARN ResourceManager RPC 地址
+    auth-type: simple             # 认证方式：simple / kerberos
+
+  # ---------- HDFS 高可用配置 ----------
+  hdfs:
+    nameservices: mycluster            # HA nameservice 名称
+    ha-namenodes: nn1,nn2              # HA 模式下两个 NN 的 ID
+    nn1-rpc: 172.21.0.8:8020           # NameNode1 RPC 地址
+    nn2-rpc: 172.21.0.7:8020           # NameNode2 RPC 地址
+    nn1-web: 172.21.0.8:9870           # NameNode1 Web UI 地址
+    nn2-web: 172.21.0.7:9870           # NameNode2 Web UI 地址
+    web-port: 9870                     # NameNode Web UI 端口
+
+  # ---------- JournalNode 配置 ----------
+  journal-node:
+    hosts:
+      - 172.21.0.6
+      - 172.21.0.5
+      - 172.21.0.3
+    web-port: 8480
+
+  # ---------- YARN 配置 ----------
+  yarn:
+    rm-address: localhost:8032
+    connect-max-wait-ms: 2000
+    connect-retry-interval-ms: 500
+
+  # ---------- Hadoop IPC 超时配置 ----------
+  ipc:
+    connect-max-retries: 1
+    connect-retry-interval: 500
+    connect-timeout: 2000
+    socket-timeout: 3000
+
+  # ---------- Grafana 仪表盘配置 ----------
+  grafana:
+    url: ""
+
+  # ---------- 回收站保留策略 ----------
+  trash:
+    retention-days: 30
