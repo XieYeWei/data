@@ -1,0 +1,24 @@
+# Maven
+**/target/
+*.jar
+*.war
+
+# Node
+**/node_modules/
+**/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# H2 Database
+**/*.mv.db
+**/*.trace.db
+
+# Logs
+*.log
